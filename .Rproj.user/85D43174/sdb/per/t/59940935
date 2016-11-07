@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1478463682474.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "59940935",
+    "lastKnownWriteTime" : 4372633856,
+    "last_content_update" : 1478463682474,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "FA334CD",
+        "caption" : "nugs_lineups",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=nugs_lineups&cache_key=FA334CD",
+        "displayedObservations" : "107",
+        "environment" : "",
+        "object" : "nugs_lineups",
+        "preview" : "0",
+        "totalObservations" : "107",
+        "variables" : "11"
+    },
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

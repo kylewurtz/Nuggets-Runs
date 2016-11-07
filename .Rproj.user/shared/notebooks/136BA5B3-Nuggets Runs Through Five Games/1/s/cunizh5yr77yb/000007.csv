@@ -1,0 +1,5 @@
+"0","cluster_a = kmeans(cluster_df, centers = 5)
+"
+"2","NAs introduced by coercion"
+"2","Error in do_one(nmeth) : NA/NaN/Inf in foreign function call (arg 1)
+"
