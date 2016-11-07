@@ -1,0 +1,393 @@
+---
+title: "Analysis of Nuggets' Lineups Through Five Games"
+author: "kyle wurtz"
+date: "`r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+    theme: yeti
+    code_folding: show
+---
+
+## Overview
+It's early in the Nuggets' season, and things have been going about as well as I expected. I figured the Nuggets would end up somewhere slightly below .500 on the season (though this was just a gut guess -- I didn't have time to do any rigorous analysis/predictive modeling), and they're currently 2-3 through 5 games. Coach Malone made an interesting comment after the dreadful performance by the Nuggets in game five on their first night of a back-to-back:
+
+> We're not going to have the same starting lineup tomorrow night. -- Coach Malone
+
+The Nuggets' starting lineup so far this season has been Mudiay, Barton/Murray, Gallinari, Jokic, and Nurkic. Barton and Nurkic have been the Nuggets' best players by far, and Barton's ankle injury really hurt them in this last game. Mudiay has been dreadful, Gallo has been inefficient, and Jokic has been good but has also disappeared for long stretches. The starters also don't seem to be playing well together at all. Mudiay noted that he was struggling with playing with both Nurkic and Jokic at the same time, and that has certainly showed. In light of Malone's comments, there's been speculation on Twitter that Malone might bench Mudiay and start Jameer Nelson, who's been playing quite well so far this year.
+
+All these talks got me wondering about who's been on the court during the Nuggets' good and bad lineups so far this year. Are there patterns in terms of who plays well or poorly together? Is the starting lineup really the issue?
+
+Since I've subscribed to BigDataBall's season pass of play-by-play data, I have the data to answer these questions! :D I know that I could do some of this analysis with NBAWowy.com, but that website drives me absolutely crazy in terms of UI and it doesn't allow me to drill into details as much as I'd like (e.g., if I notice a certain lineup has a good +/-, for example, I may want to investigate whether that lineup was playing against reserves for most of its time together, thus skewing the results).
+
+## Setup
+```{r load packages, warning = FALSE, message = FALSE}
+require(tidyverse)
+require(magrittr)
+require(lubridate)
+```
+
+### Read in Data
+We'll start off by reading the play-by-play data for all the NBA games in the season.
+```{r read data, warning = FALSE, message = FALSE}
+location_of_data = "/Users/kylewurtz/Dropbox/R/NBA Analysis/BigDataBall Data/CSV Files/2016-17/week 2 -- 16-17-pbp"
+data_name = "[10-25-2016]-[11-05-2016]-combined-stats.csv"
+df = read_csv(file.path(location_of_data, data_name))
+
+# check file parsing problems
+problems(df) %>% count(col)
+```
+
+`readr` had some problems reading a few of the columns, but I don't care about those columns so I'll ignore the issues and move on.
+
+## Work
+### Data Manipulation
+Since this analysis is focused on the Nuggets, I'll filter the play-by-play data to solely games in which the Nuggets are playing. 
+```{r filter to nuggets games only}
+nugs_ids = df %>% 
+  filter(team == "DEN") %>% 
+  count(game_id) %>% 
+  .[["game_id"]]
+nugs_games = df %>% 
+  filter(game_id %in% nugs_ids)
+# nugs_games %>% count(game_id, team) %>% pander()
+# nugs_games %>% filter(is.na(team)) %>% count(type)
+```
+
+Next, I'll create some fields to identify the Nuggets' players. Since the data is structured in terms of home and away players, it'll be easier to work with the data if I create new columns that are specific to the Nuggets players.
+```{r get columns for Nuggets players}
+# create list of Nuggets' players
+players = c("Danilo Gallinari", "Darrell Arthur", "Emmanuel Mudiay", "Gary Harris",  
+            "Jamal Murray", "Jameer Nelson", "Jarnell Stokes", "Jusuf Nurkic", 
+            "Juan Hernangomez", "Kenneth Faried", "Malik Beasley", "Mike Miller", 
+            "Nikola Jokic", "Will Barton", "Wilson Chandler")
+
+# figure out if Nuggets are home or away
+nugs_games %<>% 
+  mutate(h_o_a = ifelse(
+    a1 %in% players, "away",
+    ifelse(
+      h1 %in% players, "home",
+      "uh oh!"
+    )
+  ))
+
+# #CHECK that there are no instances in which the logic fails
+# nugs_games %>% 
+#   count(h_o_a)
+# looks good!
+
+# create cols for Nuggets players on court 
+nugs_games %<>% 
+  mutate(
+    n1 = ifelse(h_o_a == "away", a1, h1),
+    n2 = ifelse(h_o_a == "away", a2, h2),
+    n3 = ifelse(h_o_a == "away", a3, h3),
+    n4 = ifelse(h_o_a == "away", a4, h4),
+    n5 = ifelse(h_o_a == "away", a5, h5)
+  )
+```
+
+The lineups are a bit strange in NBADataBall's data. I'm not sure how it decides the sorting of `h1` through `h5`, for example. This can result in the same lineup with different ordering of players, which will be problematic when trying to analyze results by lineup. So, I'll create new fields that contain the alphabetically sorted players. Note that I'm positive there's a more efficient way to do this, but I was struggling with an elegant solution so I just wrote a for-loop. 
+```{r sort players in nugs_games}
+nugs_games %<>%
+  mutate(
+    ns1 = "",
+    ns2 = "",
+    ns3 = "",
+    ns4 = "",
+    ns5 = ""
+  )
+for (i in 1:nrow(nugs_games)) {
+  r = nugs_games[i, ]
+  p1 = r$n1
+  p2 = r$n2
+  p3 = r$n3
+  p4 = r$n4
+  p5 = r$n5
+  
+  players = c(p1, p2, p3, p4, p5)
+  players = sort(players)
+  
+  nugs_games[i, "ns1"] = players[1]
+  nugs_games[i, "ns2"] = players[2]
+  nugs_games[i, "ns3"] = players[3]
+  nugs_games[i, "ns4"] = players[4]
+  nugs_games[i, "ns5"] = players[5]
+}
+
+```
+
+/blasphemy.
+
+Next, I'll add some fields for plus/minus and time. These will be used for summary statistics later on.
+
+```{r get scores}
+nugs_games %<>%
+  mutate(
+    nugs_score = ifelse(h_o_a == "away", away_score, home_score),
+    opp_score = ifelse(h_o_a == "home", away_score, home_score),
+    score_diff = nugs_score - opp_score
+  ) %>% 
+  separate(play_length, into = c("hours", "minutes", "seconds")) %>% 
+  mutate(seconds = as.numeric(seconds)) %>% 
+  group_by(game_id) %>% 
+  mutate(score_change = score_diff - lag(score_diff)) %>% 
+  ungroup() %>% 
+  unite(lineup, ns1:ns5, remove = FALSE) 
+
+game_tags = nugs_games %>% 
+  count(game_id, team, h_o_a) %>% 
+  filter(!is.na(team)) %>% 
+  mutate(
+    opp = ifelse(team == "DEN", NA, team)
+  ) %>% 
+  filter(!is.na(opp)) %>% 
+  mutate(game = ifelse(
+    h_o_a == "away", paste0("DEN @ ", team),
+    paste0(team, " @ DEN")
+  )) %>% 
+  ungroup() %>% 
+  select(game_id, game)
+
+nugs_games %<>% left_join(game_tags)
+```
+
+### Analysis of Starting Lineups
+To kick things off with this analysis, we'll take a look at how the two starting lineups have done so far this season.
+```{r}
+nugs_games %>% 
+  filter(
+    lineup %in% c(
+      "Danilo Gallinari_Emmanuel Mudiay_Jusuf Nurkic_Nikola Jokic_Will Barton",
+      "Danilo Gallinari_Emmanuel Mudiay_Jamal Murray_Jusuf Nurkic_Nikola Jokic"
+    )
+  ) %>% 
+  group_by(lineup, game) %>% 
+  summarize(
+    score_change = sum(score_change, na.rm = T),
+    points = sum(points, na.rm = T),
+    seconds = sum(seconds)
+  ) %>% 
+  mutate(
+    minutes = seconds / 60,
+    PlusMinus = score_change,
+    Minutes = round(minutes, 0)
+  ) %>% 
+  mutate(PMperMin = round(PlusMinus / Minutes, 2)) %>% 
+  select(lineup, game, PlusMinus:PMperMin) %>% 
+  print() %>% 
+  write_csv("../Data/Output/starting_lineups.csv")
+```
+
+All things considered, the starting lineups don't look too bad. Aside from the dreadful game against Detroit yesterday, they have an even +/-. I don't blame Malone for wanting to switch things up after the terrible game yesterday, but it's possible that was just a bad game for that starting lineup. And considering the total +/- for that game was -17 (final score was 103-86), this lineup actually played *better* than average within that game...
+
+Next, I want to look at how the Nuggets have performed with certain combinations of players. If I were to guess at what Malone might do for the starting lineups, I'd bet he'll do one of the following: start Harris over Murray, start Nelson over Mudiay, or split up the Jurkic/Balkan Buddy Ball lineup. Since Harris has barely played, the sample size is too small to realistically analyze what starting him over Murray might do. So I'll skip to option two and see how the two PGs have done when playing alongside Gallo, Jokic, and Nurkic (I'm ignoring Murray since he hasn't played much either).
+
+### Analysis of PGs with Gallo and Jurkic
+```{r}
+nugs_games %>% 
+  mutate(
+    Mudiay = ifelse(grepl("Mudiay", lineup), 1, 0),
+    Nelson = ifelse(grepl("Nelson", lineup), 1, 0),
+    Gallo = ifelse(grepl("Gallinari", lineup), 1, 0),
+    Jokic = ifelse(grepl("Jokic", lineup), 1, 0),
+    Nurkic = ifelse(grepl("Nurkic", lineup), 1, 0),
+    points = ifelse(score_change > 0, score_change, 0)
+  ) %>% 
+  filter(Mudiay + Gallo + Nurkic + Nelson + Jokic == 4,
+         Mudiay + Nelson == 1,
+         event_type != "start of period") %>% 
+  group_by(Mudiay, Nelson, Gallo, Jokic, Nurkic) %>% 
+  summarize(
+    score_change = sum(score_change, na.rm = T),
+    points = sum(points, na.rm = T),
+    seconds = sum(seconds)
+  ) %>% 
+  mutate(minutes = seconds / 60,
+         PlusMinus = score_change) %>% 
+  ungroup() %>% 
+  mutate(Minutes = round(minutes, 0),
+         PMperMin = round(PlusMinus / Minutes, 2)) %>% 
+  select(Mudiay:Nurkic, PlusMinus:PMperMin) %>% 
+  print() %>% 
+  write_csv("../Data/Output/PGs.csv")
+```
+
+As it turns out, the Nelson lineup has barely played at all, so the sample size there is also too small. Let's move on to see how Mudiay has performed with Jokic and Nurkic, as he mentioned that being a point of difficulty for him earlier in the year.
+
+### Analysis of Mudiay with Jokic and Nurkic
+
+```{r}
+# nugs_games %>% 
+#   mutate(Mudiay = ifelse(grepl("Mudiay", lineup), 1, 0)) %>% 
+#   filter(Mudiay == 1) %>% 
+#   summarize(
+#     PlusMinus = sum(score_change, na.rm = T),
+#     seconds = sum(seconds)
+#   ) %>% 
+#   mutate(Minutes = seconds / 60,
+#     PMperMin = PlusMinus / Minutes)
+
+# Mudiay w/ Jokic and/or Nurkic
+nugs_games %>% 
+  mutate(
+    Mudiay = ifelse(grepl("Mudiay", lineup), 1, 0),
+    Jokic = ifelse(grepl("Jokic", lineup), 1, 0),
+    Nurkic = ifelse(grepl("Nurkic", lineup), 1, 0),
+    points = ifelse(score_change > 0, score_change, 0)
+  ) %>% 
+  filter(Mudiay == 1,
+         event_type != "start of period") %>% 
+  group_by(Mudiay, Jokic, Nurkic) %>% 
+  summarize(
+    score_change = sum(score_change, na.rm = T),
+    points = sum(points, na.rm = T),
+    seconds = sum(seconds)
+  ) %>% 
+  mutate(minutes = seconds / 60) %>% 
+  ungroup() %>% 
+  mutate(
+    Mudiay = ifelse(Mudiay == 1, "On Court", "Off Court"),
+    Jokic = ifelse(Jokic == 1, "On Court", "Off Court"),
+    Nurkic = ifelse(Nurkic == 1, "On Court", "Off Court"),
+    PlusMinus = score_change,
+    Minutes = round(minutes, 0)
+  ) %>% 
+  mutate(PMperMin = round(PlusMinus / Minutes, 2)) %>% 
+  select(Mudiay:Nurkic, PlusMinus:PMperMin) %>% 
+  print() %>% 
+  write_csv("../Data/Output/Mudiay.csv")
+```
+
+Now we're getting somewhere! Mudiay's overall +/- per minute is about -.18 (he's having a tough year...). When it's just him and Jokic, that combo is at an excellent 0.74 +/- per minute! His +/- per minute is also better than his overall average when Nurkic and Jokic are on the court with him, but it's still not great at -0.11. And when neither are on the court with him or when it's just him and Nurkic, things get much worse. 
+
+This is very interesting, and it makes me wonder if there's something to Mudiay's comment earlier in the year about how difficult it was for him to learn to play with Nurkic. As a short term solution, it seems like playing Mudiay with Jokic and Nelson with Nurkic would be a solution to the team's troubles. Let's take a look at how Nurkic and Jokic play with and without each other...
+
+```{r}
+# Jokic w/ and w/o Nurkic
+nugs_games %>% 
+  mutate(
+    Jokic = ifelse(grepl("Jokic", lineup), 1, 0),
+    Nurkic = ifelse(grepl("Nurkic", lineup), 1, 0),
+    points = ifelse(score_change > 0, score_change, 0)
+  ) %>% 
+  filter(event_type != "start of period") %>% 
+  group_by(Jokic, Nurkic) %>% 
+  summarize(
+    score_change = sum(score_change, na.rm = T),
+    points = sum(points, na.rm = T),
+    seconds = sum(seconds)
+  ) %>% 
+  mutate(minutes = seconds / 60) %>% 
+  ungroup() %>% 
+  mutate(
+    Jokic = ifelse(Jokic == 1, "On Court", "Off Court"),
+    Nurkic = ifelse(Nurkic == 1, "On Court", "Off Court"),
+    PlusMinus = score_change,
+    Minutes = round(minutes, 0)
+  ) %>% 
+  mutate(PMperMin = round(PlusMinus / Minutes, 2)) %>% 
+  select(Jokic:Nurkic, PlusMinus:PMperMin) %>% 
+  print() %>% 
+  write_csv("../Data/Output/BBB.csv")
+```
+
+Unsurprisingly, the two centers seem to play better alone than together. This is to be expected early in the season, as the two aren't used to playing with each other and Jokic still looks silly defending power forwards on the perimeter quite often.
+
+So the two seem to play better together, and the Mudiay/Jokic combo seems to be quite successful. Let's see what the Nelson/Nurkic combo looks like.
+
+```{r}
+# nugs_games %>%
+#   mutate(Nelson = ifelse(grepl("Nelson", lineup), 1, 0)) %>%
+#   filter(Nelson == 1) %>%
+#   summarize(
+#     PlusMinus = sum(score_change, na.rm = T),
+#     seconds = sum(seconds)
+#   ) %>%
+#   mutate(Minutes = seconds / 60,
+#     PMperMin = PlusMinus / Minutes)
+
+# Nelson w/ Jokic and/or Nurkic
+nugs_games %>% 
+  mutate(
+    Nelson = ifelse(grepl("Nelson", lineup), 1, 0),
+    Jokic = ifelse(grepl("Jokic", lineup), 1, 0),
+    Nurkic = ifelse(grepl("Nurkic", lineup), 1, 0),
+    points = ifelse(score_change > 0, score_change, 0)
+  ) %>% 
+  filter(Nelson == 1,
+         event_type != "start of period") %>% 
+  group_by(Nelson, Jokic, Nurkic) %>% 
+  summarize(
+    score_change = sum(score_change, na.rm = T),
+    points = sum(points, na.rm = T),
+    seconds = sum(seconds)
+  ) %>% 
+  mutate(minutes = seconds / 60) %>% 
+  ungroup() %>% 
+  mutate(
+    Nelson = ifelse(Nelson == 1, "On Court", "Off Court"),
+    Jokic = ifelse(Jokic == 1, "On Court", "Off Court"),
+    Nurkic = ifelse(Nurkic == 1, "On Court", "Off Court"),
+    PlusMinus = score_change,
+    Minutes = round(minutes, 0)
+  ) %>% 
+  mutate(PMperMin = round(PlusMinus / Minutes, 2)) %>% 
+  select(Nelson:Nurkic, PlusMinus:PMperMin) %>% 
+  print() %>% 
+  write_csv("../Data/Output/Nelson.csv")
+```
+
+Nelson's overall +/- per minute is about -.09, so playing without either of the centers and just with Jokic are worse than his average. The sample size for him playing with both centers is quite small, so it'll be interesting to get some more data with that lineup if Malone does in fact replace Mudiay with Nelson in the starting lineup tonight. It's promising to see Nelson and Nurkic have some success, and that also suggests that splitting up the PGs/Centers would be beneficial.
+
+The downside of this approach is that it doesn't give the combo of Mudiay, Jokic, and Nurkic a chance to develop together. All three are (or should be) considered cores of the future Nuggets, so I'm not sure how sustainable splitting them up is in the long-term. Regardless, it'll be interesting to see how Malone handles the lineups tonight (and every night for the foreseeable future...).
+
+
+## Conclusions
+
+
+
+```{r}
+set.seed(4)
+cluster_df = nugs_games %>% 
+  select(ns1:ns5, score_change) %>% 
+  filter(!is.na(score_change)) %>% 
+  mutate(
+    ns1 = factor(ns1),
+    ns2 = factor(ns2),
+    ns3 = factor(ns3),
+    ns4 = factor(ns4),
+    ns5 = factor(ns5)
+  )
+cluster_a = kmeans(cluster_df, centers = 5)
+?kmeans
+iris[, 3:4]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

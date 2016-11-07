@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1478462513394.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "BCD79BE0",
+    "lastKnownWriteTime" : 0,
+    "last_content_update" : 1478462513394,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "856677B0",
+        "caption" : "nugs_games",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=nugs_games&cache_key=856677B0",
+        "displayedObservations" : 2485,
+        "environment" : "",
+        "object" : "nugs_games",
+        "preview" : 0,
+        "totalObservations" : 2485,
+        "variables" : 44
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

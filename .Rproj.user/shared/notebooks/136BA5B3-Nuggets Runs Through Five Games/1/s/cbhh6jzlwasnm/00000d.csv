@@ -1,0 +1,5 @@
+"0","location_of_data = ""/Users/kylewurtz/Dropbox/R/NBA Analysis/BigDataBall Data/CSV Files/2016-17/week 2 -- 16-17-pbp"""
+"0","data_name = ""[10-25-2016]-[11-05-2016]-combined-stats.csv"""
+"0","df = read_csv(file.path(location_of_data, data_name))"
+"0","# check file parsing problems"
+"0","problems(df) %>% count(col)"

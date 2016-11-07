@@ -1,0 +1,21 @@
+{
+    "collab_server" : "",
+    "contents" : "Location of data: /Users/kylewurtz/Dropbox/R/NBA Analysis/BigDataBall Data/CSV Files/2016-17/week 2 -- 16-17-pbp\n\nNote that, because BigDataBall is a paid service, I will not be posting the data itself to the GitHub repository.",
+    "created" : 1478461507059.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3605539041",
+    "id" : "3EB3EBC6",
+    "lastKnownWriteTime" : 1478461578,
+    "last_content_update" : 1478461578822,
+    "path" : "~/Dropbox/R/NBA Analysis/2016-17/Nuggets' Runs/Nuggets-Runs/Data/Input/Data ReadMe",
+    "project_path" : "Data/Input/Data ReadMe",
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "text"
+}

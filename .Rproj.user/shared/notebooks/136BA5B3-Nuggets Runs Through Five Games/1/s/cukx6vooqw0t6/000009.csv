@@ -1,0 +1,8 @@
+"0","nugs_ids = df %>% "
+"0","  filter(team == ""DEN"") %>% "
+"0","  count(game_id) %>% "
+"0","  .[[""game_id""]]"
+"0","nugs_games = df %>% "
+"0","  filter(game_id %in% nugs_ids)"
+"0","# nugs_games %>% count(game_id, team) %>% pander()"
+"0","# nugs_games %>% filter(is.na(team)) %>% count(type)"
